@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ViralGen</title>
+<style>
+:root{--bg:#f7f5fb;--card:#fff;--tx:#1b1630;--mut:#6b6580;--ac:#7c3aed;--ac2:#ec4899;--bd:#e4dff0;--hook:#fff4e0;--hooktx:#8a4b00;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#120e1f;--card:#1c1730;--tx:#f1edfb;--mut:#a39cbc;--bd:#322a4d;--hook:#3a2a10;--hooktx:#ffcf80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:18px 16px 48px}
+h1{font-size:26px;margin:4px 0 2px;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--mut);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 6px}
+input,textarea,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:10px}
+textarea{min-height:84px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button.go{width:100%;margin-top:14px;padding:14px;font:inherit;font-weight:700;font-size:16px;color:#fff;border:0;border-radius:14px;background:linear-gradient(90deg,var(--ac),var(--ac2));cursor:pointer}
+button.go:disabled{opacity:.6}
+.hook{background:var(--hook);color:var(--hooktx);border-radius:12px;padding:12px;font-weight:700;font-size:17px}
+.tag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.cp{font-size:12px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:8px;padding:3px 8px;cursor:pointer}
+.scene h3{margin:0 0 6px;font-size:15px}.scene h3 span{color:var(--mut);font-weight:500;font-size:13px}
+.scene p{margin:4px 0;font-size:14px}.scene b{color:var(--ac)}
+.pr{background:var(--bg);border:1px dashed var(--bd);border-radius:10px;padding:8px;font-size:13px;margin-top:6px}
+.ht{color:var(--ac);font-size:14px;word-break:break-word}
+.err{color:#c0262d;font-size:14px;padding:8px 0}
+video{width:100%;max-height:70vh;border-radius:12px;background:#000;margin-top:8px}
+.bar{height:8px;background:var(--bd);border-radius:99px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));transition:width .4s}
+a.dl{display:inline-block;margin-top:8px;color:var(--ac);font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>ViralGen</h1>
+<p class="sub">Une idée en entrée, une vidéo verticale en sortie.</p>
+
+<div class="card">
+<label for="key">Code d'accès</label>
+<input id="key" type="password" placeholder="Code d'accès" autocomplete="off">
+<label for="idea">Ton idée ou sujet</label>
+<textarea id="idea" placeholder="Ex : 3 erreurs qui font perdre des abonnés sur TikTok"></textarea>
+<div class="row">
+<div><label for="plat">Plateforme</label><select id="plat"><option>TikTok</option><option>Instagram Reels</option><option>YouTube Shorts</option></select></div>
+<div><label for="dur">Durée</label><select id="dur"><option value="15">15 s</option><option value="30" selected>30 s</option><option value="60">60 s</option></select></div>
+</div>
+<label for="tone">Style</label>
+<select id="tone"><option>Punchy et direct</option><option>Storytelling émotionnel</option><option>Humoristique</option><option>Mystérieux / suspense</option><option>Éducatif simple</option></select>
+<button class="go" id="go">Générer le script</button>
+</div>
+<div id="out"></div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let SCENES=[];
+$("key").value=sessionStorage.getItem("vk")||"";
+
+function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e}
+function cp(text){const b=el("button","cp","Copier");b.onclick=async()=>{try{await navigator.clipboard.writeText(text);b.textContent="Copié ✓"}catch(e){b.textContent="Échec"}setTimeout(()=>b.textContent="Copier",1400)};return b}
+function block(label,node,copyText){const c=el("div","card");const t=el("div","tag");t.appendChild(el("span","",label));if(copyText)t.appendChild(cp(copyText));c.appendChild(t);c.appendChild(node);return c}
+
+async function api(path,opts={}){
+  const key=$("key").value.trim();sessionStorage.setItem("vk",key);
+  const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json","x-app-key":key}});
+  if(r.status===401)throw new Error("Code d'accès incorrect.");
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||"Erreur serveur.");
+  return d;
+}
+
+function render(d){
+  const out=$("out");out.textContent="";
+  out.appendChild(block("Hook (3 premières secondes)",el("div","hook",d.hook),d.hook));
+  out.appendChild(block("Script complet",el("div","",d.script),d.script));
+  SCENES=d.scenes||[];
+  SCENES.forEach((s,i)=>{
+    const w=el("div","scene");const h=el("h3","",`Scène ${s.numero||i+1} `);h.appendChild(el("span","",`· ${s.duree||""}`));w.appendChild(h);
+    [["Visuel",s.visuel],["Voix off",s.voix],["Texte à l'écran",s.texte_ecran]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
+    if(s.prompt_video)w.appendChild(el("div","pr",s.prompt_video));
+    out.appendChild(block("Scène",w,s.prompt_video||""));
+  });
+  const tags=(d.hashtags||[]).join(" ");
+  const f=el("div");f.appendChild(el("p","",d.legende||""));f.appendChild(el("div","ht",tags));
+  out.appendChild(block("Légende + hashtags",f,(d.legende||"")+"\n"+tags));
+
+  const v=el("div");
+  v.appendChild(el("p","",`Génère ${SCENES.length} clips puis les assemble en une vidéo. Chaque clip est facturé par ton fournisseur de modèle.`));
+  const vb=el("button","go","Générer la vidéo");vb.id="vgo";v.appendChild(vb);
+  const st=el("p","");st.id="st";const bar=el("div","bar");bar.appendChild(el("i"));bar.style.display="none";v.append(st,bar);
+  const res=el("div");res.id="res";v.appendChild(res);
+  vb.onclick=()=>makeVideo(vb,st,bar,res);
+  out.appendChild(block("Vidéo",v));
+  out.scrollIntoView({behavior:"smooth"});
+}
+
+async function makeVideo(btn,st,bar,res){
+  btn.disabled=true;res.textContent="";bar.style.display="block";bar.firstChild.style.width="3%";st.textContent="Envoi des scènes…";
+  try{
+    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video}))})});
+    for(;;){
+      await new Promise(r=>setTimeout(r,3000));
+      const j=await api("/api/videos/"+id);
+      if(j.status==="generating"){st.textContent=`Clips générés : ${j.done}/${j.total}`;bar.firstChild.style.width=Math.max(5,j.done/j.total*85)+"%"}
+      else if(j.status==="assembling"){st.textContent="Assemblage de la vidéo…";bar.firstChild.style.width="92%"}
+      else if(j.status==="done"){
+        bar.firstChild.style.width="100%";st.textContent="Vidéo prête.";
+        const vid=el("video");vid.src=j.url;vid.controls=true;vid.playsInline=true;res.appendChild(vid);
+        const a=el("a","dl","Télécharger la vidéo");a.href=j.url;a.download="viralgen.mp4";res.appendChild(a);break;
+      }else throw new Error(j.error||"Échec de la génération.");
+    }
+  }catch(e){st.textContent="";res.appendChild(el("div","err",e.message))}
+  btn.disabled=false;
+}
+
+$("go").onclick=async()=>{
+  const idea=$("idea").value.trim();const out=$("out");
+  if(!idea){out.textContent="";out.appendChild(el("div","err","Écris d'abord une idée."));return}
+  const b=$("go");b.disabled=true;b.textContent="Génération…";out.textContent="";
+  try{render(await api("/api/script",{method:"POST",body:JSON.stringify({idea,platform:$("plat").value,duration:Number($("dur").value),tone:$("tone").value})}))}
+  catch(e){out.appendChild(el("div","err",e.message))}
+  b.disabled=false;b.textContent="Générer le script";
+};
+</script>
+</body>
+</html>
