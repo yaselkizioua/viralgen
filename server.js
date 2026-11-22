@@ -181,10 +181,28 @@ app.post("/api/script", async (req, res) => {
     const { idea, platform = "TikTok", duration = 30, tone = "Punchy et direct" } = req.body || {};
     if (!idea || typeof idea !== "string") return res.status(400).json({ error: "Idée manquante." });
     const dur = [15, 30, 60].includes(Number(duration)) ? Number(duration) : 30;
-    const prompt = `Tu es un expert en vidéos courtes virales (rétention, hooks, storytelling). Idée : "${idea.slice(0, 500)}". Plateforme : ${String(platform).slice(0, 30)}. Durée : ${dur} secondes. Style : ${String(tone).slice(0, 40)}.
-Réponds en français avec UNIQUEMENT un objet JSON de cette forme :
-{"hook":"...","script":"texte complet de la voix off","scenes":[{"numero":1,"duree":"0-3 s","visuel":"description du plan","voix":"texte dit","texte_ecran":"texte court","prompt_video":"prompt en anglais, détaillé, format vertical 9:16, pour un générateur de vidéo IA"}],"legende":"...","hashtags":["#..."]}
-Règles : 4 à 6 scènes dont les durées totalisent ${dur} s, un cliffhanger ou une boucle en fin de vidéo, aucun texte hors JSON.`;
+    const brief = idea.slice(0, 12000);
+    const isBrief = brief.length > 400;
+    const prompt = `Tu es un expert en vidéos courtes virales (rétention, hooks, storytelling). Plateforme : ${String(platform).slice(0, 30)}. Style : ${String(tone).slice(0, 40)}.
+
+${isBrief ? "BRIEF DÉTAILLÉ DU CRÉATEUR" : "IDÉE"} :
+<<<
+${brief}
+>>>
+
+${isBrief
+  ? `Ce texte est un brief précis. Tu dois le RESPECTER FIDÈLEMENT, pas inventer une autre histoire :
+- garde exactement les mêmes scènes, dans le même ordre (8 scènes maximum) ;
+- reprends MOT POUR MOT les voix off du brief dans "voix" ; si une voix off est à laisser vide, mets "voix": "" ;
+- reprends les gros titres / textes écran du brief dans "texte_ecran" (court) ;
+- reprends les durées du brief dans "duree" (la durée du brief est prioritaire sur ${dur} s) ;
+- "visuel" résume le visuel décrit dans le brief ;
+- "prompt_video" (en anglais) traduit le visuel de la scène ET répète à chaque scène la direction artistique du brief (style, palette, personnage décrit à l'identique), pour que toutes les scènes se ressemblent ;
+- "hook" = l'accroche de la première scène ; "script" = toutes les voix off bout à bout.`
+  : `Durée : ${dur} secondes. Crée 4 à 6 scènes dont les durées totalisent ${dur} s, avec un cliffhanger ou une boucle en fin de vidéo. Dans chaque "prompt_video", répète le même style visuel et décris le personnage principal à l'identique.`}
+
+Réponds en français avec UNIQUEMENT un objet JSON de cette forme, aucun texte hors JSON :
+{"hook":"...","script":"texte complet de la voix off","scenes":[{"numero":1,"duree":"0-3 s","visuel":"description du plan","voix":"texte dit","texte_ecran":"texte court","prompt_video":"prompt en anglais, détaillé, format vertical 9:16, pour un générateur de vidéo IA"}],"legende":"...","hashtags":["#..."]}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
