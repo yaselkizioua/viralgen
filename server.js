@@ -17,51 +17,115 @@ const jobs = new Map();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function rep(url, opts = {}) {
-  for (let attempt = 0; ; attempt++) { const r = await fetch(url, {
-    ...opts,
-    headers: { Authorization: `Bearer ${REPLICATE_API_TOKEN}`, "Content-Type": "application/json" },
-  });
-  if (r.status === 429 && attempt < 10) { await sleep(((Number(r.headers.get("retry-after")) || 10) + 1) * 1000); continue; } if (!r.ok) throw new Error(`Replicate ${r.status}: ${await r.text()}`);
-  return r.json(); }
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, {
+      ...opts,
+      headers: { Authorization: `Bearer ${REPLICATE_API_TOKEN}`, "Content-Type": "application/json" },
+    });
+    if (r.status === 429 && attempt < 10) {
+      await sleep(((Number(r.headers.get("retry-after")) || 10) + 1) * 1000);
+      continue;
+    }
+    if (!r.ok) throw new Error(`Replicate ${r.status}: ${await r.text()}`);
+    return r.json();
+  }
 }
 
-// Génère un clip pour une scène, renvoie l'URL du fichier vidéo
-async function makeClip(scene) {
-  const input = { prompt: scene.prompt_video, ...JSON.parse(INPUT_EXTRA) };
-  let p = await rep(`https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions`, {
-    method: "POST",
-    body: JSON.stringify({ input }),
-  });
+// Attend la fin d'une prédiction Replicate et renvoie l'URL du fichier produit
+async function waitOutput(p, label) {
   while (!["succeeded", "failed", "canceled"].includes(p.status)) {
     await sleep(3000);
     p = await rep(p.urls.get);
   }
-  if (p.status !== "succeeded") throw new Error(p.error || "Génération du clip échouée");
-  return Array.isArray(p.output) ? p.output[0] : p.output;
+  if (p.status !== "succeeded") throw new Error(`${label} : ${p.error || "génération échouée"}`);
+  const out = Array.isArray(p.output) ? p.output[0] : p.output;
+  return typeof out === "string" ? out : out?.url || out?.audio || out;
+}
+
+// Génère un clip vidéo pour une scène
+async function makeClip(scene) {
+  const input = { prompt: scene.prompt_video, ...JSON.parse(INPUT_EXTRA) };
+  const p = await rep(`https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions`, {
+    method: "POST",
+    body: JSON.stringify({ input }),
+  });
+  return waitOutput(p, "Clip vidéo");
+}
+
+// Génère la voix off d'une scène (synthèse vocale en français)
+const TTS_VERSION = process.env.TTS_VERSION || "9cfba4c265e685f840612be835424f8c33bdee685d7466ece7684b0d9d4c0b1c";
+const TTS_LANG = process.env.TTS_LANG || "fr";
+async function makeVoice(text) {
+  const p = await rep("https://api.replicate.com/v1/predictions", {
+    method: "POST",
+    body: JSON.stringify({ version: TTS_VERSION, input: { text: text.slice(0, 300), language: TTS_LANG } }),
+  });
+  return waitOutput(p, "Voix off");
 }
 
 async function download(url, file) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error("Téléchargement du clip impossible");
+  if (!r.ok) throw new Error("Téléchargement d'un fichier Replicate impossible");
   await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
 }
 
-// Assemble les clips en une vidéo verticale 1080x1920
-function assemble(files, output) {
-  const args = ["-y"];
-  files.forEach((f) => args.push("-i", f));
-  const prep = files
-    .map((_, i) => `[${i}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1,fps=30[v${i}]`)
-    .join(";");
-  const join = files.map((_, i) => `[v${i}]`).join("") + `concat=n=${files.length}:v=1:a=0[out]`;
-  args.push("-filter_complex", `${prep};${join}`, "-map", "[out]", "-c:v", "libx264", "-preset", "veryfast", "-threads", "2", "-pix_fmt", "yuv420p", output);
+function run(cmd, args) {
   return new Promise((resolve, reject) => {
-    const ff = spawn("ffmpeg", args);
-    let err = "";
-    ff.stderr.on("data", (d) => (err += d));
-    ff.on("error", () => reject(new Error("FFmpeg introuvable : installe-le sur le serveur")));
-    ff.on("close", (c) => (c === 0 ? resolve() : reject(new Error("FFmpeg a échoué: " + err.slice(-300)))));
+    const p = spawn(cmd, args);
+    let out = "", err = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("error", () => reject(new Error(`${cmd} introuvable : installe FFmpeg sur le serveur`)));
+    p.on("close", (c) => (c === 0 ? resolve(out) : reject(new Error(`${cmd} a échoué (code ${c}): ` + err.slice(-400)))));
   });
+}
+
+async function duration(file) {
+  const out = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file]);
+  return parseFloat(out) || 5;
+}
+
+// Coupe le texte en lignes courtes pour l'écran vertical
+function wrap(text, max = 18) {
+  const lines = [];
+  let line = "";
+  for (const w of text.split(/\s+/).filter(Boolean)) {
+    if (line && (line + " " + w).length > max) { lines.push(line); line = w; }
+    else line = line ? line + " " + w : w;
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 4).join("\n");
+}
+
+const FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+
+// Fabrique un segment 720x1280 : clip (bouclé si besoin) + voix off + texte à l'écran
+async function buildSegment({ clip, voice, text }, dir, i) {
+  const out = path.join(dir, `seg${i}.mp4`);
+  const dur = voice ? (await duration(voice)) + 0.4 : await duration(clip);
+  let vf = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1,fps=30";
+  if (text) {
+    const tf = path.join(dir, `txt${i}.txt`);
+    await fs.writeFile(tf, wrap(text));
+    vf += `,drawtext=fontfile=${FONT}:textfile=${tf}:fontsize=48:fontcolor=white:borderw=5:bordercolor=black:line_spacing=12:x=(w-text_w)/2:y=h*0.68`;
+  }
+  const args = ["-y", "-stream_loop", "-1", "-i", clip];
+  if (voice) args.push("-i", voice);
+  else args.push("-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo");
+  args.push(
+    "-vf", vf, "-map", "0:v", "-map", "1:a", "-t", dur.toFixed(2),
+    "-c:v", "libx264", "-preset", "veryfast", "-threads", "2", "-pix_fmt", "yuv420p", "-r", "30",
+    "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", out
+  );
+  await run("ffmpeg", args);
+  return out;
+}
+
+// Met les segments bout à bout sans réencoder
+async function concat(segments, dir, output) {
+  const list = path.join(dir, "list.txt");
+  await fs.writeFile(list, segments.map((s) => `file '${s}'`).join("\n"));
+  await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", list, "-c", "copy", "-movflags", "+faststart", output]);
 }
 
 async function runJob(id, scenes) {
@@ -69,20 +133,31 @@ async function runJob(id, scenes) {
   try {
     const dir = path.join(OUT, id);
     await fs.mkdir(dir, { recursive: true });
-    const files = await Promise.all(
+    const parts = await Promise.all(
       scenes.map(async (s, i) => {
-        const url = await makeClip(s);
-        const f = path.join(dir, `clip${i}.mp4`);
-        await download(url, f);
+        const [clipUrl, voiceUrl] = await Promise.all([
+          makeClip(s),
+          s.voix ? makeVoice(s.voix) : Promise.resolve(null),
+        ]);
+        const clip = path.join(dir, `clip${i}.mp4`);
+        await download(clipUrl, clip);
+        let voice = null;
+        if (voiceUrl) {
+          voice = path.join(dir, `voice${i}.audio`);
+          await download(voiceUrl, voice);
+        }
         job.done += 1;
-        return f;
+        return { clip, voice, text: s.texte_ecran };
       })
     );
     job.status = "assembling";
-    await assemble(files, path.join(OUT, `${id}.mp4`));
+    const segments = [];
+    for (let i = 0; i < parts.length; i++) segments.push(await buildSegment(parts[i], dir, i));
+    await concat(segments, dir, path.join(OUT, `${id}.mp4`));
     job.status = "done";
     job.url = `/out/${id}.mp4`;
   } catch (e) {
+    console.error(`Job ${id} :`, e.message);
     job.status = "error";
     job.error = e.message;
   }
@@ -124,9 +199,12 @@ Règles : 4 à 6 scènes dont les durées totalisent ${dur} s, un cliffhanger ou
   }
 });
 
-// Corps attendu : { scenes: [{ prompt_video: "..." }, ...] }
+// Corps attendu : { scenes: [{ prompt_video: "...", voix: "...", texte_ecran: "..." }, ...] }
 app.post("/api/videos", (req, res) => {
-  const scenes = (req.body?.scenes || []).filter((s) => typeof s.prompt_video === "string" && s.prompt_video.trim());
+  const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+  const scenes = (req.body?.scenes || [])
+    .filter((s) => typeof s.prompt_video === "string" && s.prompt_video.trim())
+    .map((s) => ({ prompt_video: s.prompt_video, voix: str(s.voix, 300), texte_ecran: str(s.texte_ecran, 80) }));
   if (!scenes.length || scenes.length > 8) return res.status(400).json({ error: "Entre 1 et 8 scènes avec prompt_video." });
   const id = crypto.randomUUID();
   jobs.set(id, { status: "generating", done: 0, total: scenes.length });
