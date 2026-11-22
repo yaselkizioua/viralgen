@@ -52,13 +52,13 @@ async function makeClip(scene) {
   return waitOutput(p, "Clip vidéo");
 }
 
-// Génère la voix off d'une scène (synthèse vocale en français)
-const TTS_VERSION = process.env.TTS_VERSION || "9cfba4c265e685f840612be835424f8c33bdee685d7466ece7684b0d9d4c0b1c";
-const TTS_LANG = process.env.TTS_LANG || "fr";
+// Génère la voix off d'une scène (voix d'homme narrateur, en français)
+const TTS_MODEL = process.env.TTS_MODEL || "minimax/speech-02-hd";
+const TTS_VOICE = process.env.TTS_VOICE || "French_MaleNarrator";
 async function makeVoice(text) {
-  const p = await rep("https://api.replicate.com/v1/predictions", {
+  const p = await rep(`https://api.replicate.com/v1/models/${TTS_MODEL}/predictions`, {
     method: "POST",
-    body: JSON.stringify({ version: TTS_VERSION, input: { text: text.slice(0, 300), language: TTS_LANG } }),
+    body: JSON.stringify({ input: { text: text.slice(0, 300), voice_id: TTS_VOICE, language_boost: "French" } }),
   });
   return waitOutput(p, "Voix off");
 }
