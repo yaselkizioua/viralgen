@@ -78,7 +78,7 @@ function render(d){
   SCENES=d.scenes||[];
   SCENES.forEach((s,i)=>{
     const w=el("div","scene");const h=el("h3","",`Scène ${s.numero||i+1} `);h.appendChild(el("span","",`· ${s.duree||""}`));w.appendChild(h);
-    [["Visuel",s.visuel],["Voix off",s.voix],["Texte à l'écran",s.texte_ecran]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
+    [["Visuel",s.visuel],["Voix off",s.voix]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
     if(s.prompt_video)w.appendChild(el("div","pr",s.prompt_video));
     out.appendChild(block("Scène",w,s.prompt_video||""));
   });
@@ -99,7 +99,7 @@ function render(d){
 async function makeVideo(btn,st,bar,res){
   btn.disabled=true;res.textContent="";bar.style.display="block";bar.firstChild.style.width="3%";st.textContent="Envoi des scènes…";
   try{
-    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video,voix:s.voix||"",texte_ecran:s.texte_ecran||""}))})});
+    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video,voix:s.voix||""}))})});
     for(;;){
       await new Promise(r=>setTimeout(r,3000));
       const j=await api("/api/videos/"+id);
