@@ -30,8 +30,6 @@ button.go:disabled{opacity:.6}
 video{width:100%;max-height:70vh;border-radius:12px;background:#000;margin-top:8px}
 .bar{height:8px;background:var(--bd);border-radius:99px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));transition:width .4s}
 a.dl{display:inline-block;margin-top:8px;color:var(--ac);font-weight:600}
-.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:10px;font-weight:500}.chk input{width:auto}
-.txts{margin:6px 0 0;padding-left:18px;font-size:13px}.txts li{margin:2px 0}
 </style>
 </head>
 <body>
@@ -57,7 +55,7 @@ a.dl{display:inline-block;margin-top:8px;color:var(--ac);font-weight:600}
 
 <script>
 const $=id=>document.getElementById(id);
-let SCENES=[],DATA={};
+let SCENES=[];let HOOK_TITRE="";
 $("key").value=sessionStorage.getItem("vk")||"";
 
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e}
@@ -76,16 +74,13 @@ async function api(path,opts={}){
 function render(d){
   const out=$("out");out.textContent="";
   out.appendChild(block("Hook (3 premières secondes)",el("div","hook",d.hook),d.hook));
+  HOOK_TITRE=d.titre_hook||"";
+  if(HOOK_TITRE)out.appendChild(block("Titre affiché au début",el("div","hook",HOOK_TITRE),HOOK_TITRE));
   out.appendChild(block("Script complet",el("div","",d.script),d.script));
-  DATA=d;SCENES=d.scenes||[];
-  if(d.bandeau)out.appendChild(block("Bandeau (affiché en haut pendant toute la vidéo)",el("div","",d.bandeau),d.bandeau));
+  SCENES=d.scenes||[];
   SCENES.forEach((s,i)=>{
     const w=el("div","scene");const h=el("h3","",`Scène ${s.numero||i+1} `);h.appendChild(el("span","",`· ${s.duree||""}`));w.appendChild(h);
-    [["Visuel",s.visuel],["Voix off",s.voix]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
-    if(Array.isArray(s.textes)&&s.textes.length){
-      const p=el("p");p.appendChild(el("b","","Textes à l'écran :"));w.appendChild(p);
-      const ul=el("ul","txts");s.textes.forEach(t=>ul.appendChild(el("li","",`${t.texte} (${t.position||"centre"}, ${t.style||"titre"})`)));w.appendChild(ul);
-    }
+    [["Visuel",s.visuel],["Voix off",s.voix],["Texte à l'écran",s.texte_ecran]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
     if(s.prompt_video)w.appendChild(el("div","pr",s.prompt_video));
     out.appendChild(block("Scène",w,s.prompt_video||""));
   });
@@ -95,10 +90,6 @@ function render(d){
 
   const v=el("div");
   v.appendChild(el("p","",`Génère ${SCENES.length} clips puis les assemble en une vidéo. Chaque clip est facturé par ton fournisseur de modèle.`));
-  const vl=el("label","","Voix off");vl.htmlFor="vstyle";
-  const vs=el("select");vs.id="vstyle";[["dynamique","Dynamique (rapide et énergique)"],["posee","Posée (calme)"]].forEach(([k,t])=>{const o=el("option","",t);o.value=k;vs.appendChild(o)});
-  const cl=el("label","chk");const cb=el("input");cb.type="checkbox";cb.id="subs";cb.checked=true;cl.append(cb,document.createTextNode("Sous-titres de la voix off"));
-  v.append(vl,vs,cl);
   const vb=el("button","go","Générer la vidéo");vb.id="vgo";v.appendChild(vb);
   const st=el("p","");st.id="st";const bar=el("div","bar");bar.appendChild(el("i"));bar.style.display="none";v.append(st,bar);
   const res=el("div");res.id="res";v.appendChild(res);
@@ -110,9 +101,7 @@ function render(d){
 async function makeVideo(btn,st,bar,res){
   btn.disabled=true;res.textContent="";bar.style.display="block";bar.firstChild.style.width="3%";st.textContent="Envoi des scènes…";
   try{
-    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({
-      scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video,voix:s.voix||"",duree:s.duree||"",textes:Array.isArray(s.textes)?s.textes:[]})),
-      hook:DATA.hook||"",bandeau:DATA.bandeau||"",voix:$("vstyle").value,sous_titres:$("subs").checked})});
+    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({titre_hook:HOOK_TITRE,scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video,voix:s.voix||"",texte_ecran:s.texte_ecran||""}))})});
     for(;;){
       await new Promise(r=>setTimeout(r,3000));
       const j=await api("/api/videos/"+id);
