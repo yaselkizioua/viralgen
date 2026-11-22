@@ -60,6 +60,7 @@ $("key").value=sessionStorage.getItem("vk")||"";
 
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e}
 function cp(text){const b=el("button","cp","Copier");b.onclick=async()=>{try{await navigator.clipboard.writeText(text);b.textContent="Copié ✓"}catch(e){b.textContent="Échec"}setTimeout(()=>b.textContent="Copier",1400)};return b}
+function editable(val,onChange){const i=el("input");i.type="text";i.value=val||"";i.maxLength=60;i.placeholder="Aucun texte";i.oninput=()=>onChange(i.value);return i}
 function block(label,node,copyText){const c=el("div","card");const t=el("div","tag");t.appendChild(el("span","",label));if(copyText)t.appendChild(cp(copyText));c.appendChild(t);c.appendChild(node);return c}
 
 async function api(path,opts={}){
@@ -75,12 +76,14 @@ function render(d){
   const out=$("out");out.textContent="";
   out.appendChild(block("Hook (3 premières secondes)",el("div","hook",d.hook),d.hook));
   HOOK_TITRE=d.titre_hook||"";
-  if(HOOK_TITRE)out.appendChild(block("Titre affiché au début",el("div","hook",HOOK_TITRE),HOOK_TITRE));
+  out.appendChild(block("Hook affiché en haut au début (modifiable)",editable(HOOK_TITRE,v=>HOOK_TITRE=v)));
   out.appendChild(block("Script complet",el("div","",d.script),d.script));
   SCENES=d.scenes||[];
   SCENES.forEach((s,i)=>{
     const w=el("div","scene");const h=el("h3","",`Scène ${s.numero||i+1} `);h.appendChild(el("span","",`· ${s.duree||""}`));w.appendChild(h);
-    [["Visuel",s.visuel],["Voix off",s.voix],["Texte à l'écran",s.texte_ecran]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
+    [["Visuel",s.visuel],["Voix off",s.voix]].forEach(([k,v])=>{if(v){const p=el("p");p.appendChild(el("b","",k+" : "));p.appendChild(document.createTextNode(v));w.appendChild(p)}});
+    const lb=el("p");lb.appendChild(el("b","","Texte à l'écran : "));lb.appendChild(document.createTextNode("(vide = aucun texte)"));w.appendChild(lb);
+    w.appendChild(editable(s.texte_ecran||"",v=>s.texte_ecran=v));
     if(s.prompt_video)w.appendChild(el("div","pr",s.prompt_video));
     out.appendChild(block("Scène",w,s.prompt_video||""));
   });
