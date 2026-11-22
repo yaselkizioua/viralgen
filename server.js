@@ -17,12 +17,12 @@ const jobs = new Map();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function rep(url, opts = {}) {
-  const r = await fetch(url, {
+  for (let attempt = 0; ; attempt++) { const r = await fetch(url, {
     ...opts,
     headers: { Authorization: `Bearer ${REPLICATE_API_TOKEN}`, "Content-Type": "application/json" },
   });
-  if (!r.ok) throw new Error(`Replicate ${r.status}: ${await r.text()}`);
-  return r.json();
+  if (r.status === 429 && attempt < 10) { await sleep(((Number(r.headers.get("retry-after")) || 10) + 1) * 1000); continue; } if (!r.ok) throw new Error(`Replicate ${r.status}: ${await r.text()}`);
+  return r.json(); }
 }
 
 // Génère un clip pour une scène, renvoie l'URL du fichier vidéo
