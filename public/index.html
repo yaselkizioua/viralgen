@@ -99,7 +99,7 @@ function render(d){
 async function makeVideo(btn,st,bar,res){
   btn.disabled=true;res.textContent="";bar.style.display="block";bar.firstChild.style.width="3%";st.textContent="Envoi des scènes…";
   try{
-    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video}))})});
+    const {id}=await api("/api/videos",{method:"POST",body:JSON.stringify({scenes:SCENES.filter(s=>s.prompt_video).map(s=>({prompt_video:s.prompt_video,voix:s.voix||"",texte_ecran:s.texte_ecran||""}))})});
     for(;;){
       await new Promise(r=>setTimeout(r,3000));
       const j=await api("/api/videos/"+id);
