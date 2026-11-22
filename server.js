@@ -220,14 +220,14 @@ ${isBrief
   ? `Ce texte est un brief précis. Tu dois le RESPECTER FIDÈLEMENT, pas inventer une autre histoire :
 - garde exactement les mêmes scènes, dans le même ordre (8 scènes maximum) ;
 - reprends MOT POUR MOT les voix off du brief dans "voix" ; si une voix off est à laisser vide, mets "voix": "" ;
-- "texte_ecran" = le gros titre ou message à afficher pendant la scène, repris du brief (sans emoji, 60 caractères maximum, "" s'il n'y en a pas) ;
+- "texte_ecran" = UNIQUEMENT le gros titre / texte écran que le brief demande pour cette scène (sans emoji, 45 caractères maximum) ; ignore bandeaux, compteurs, étiquettes et sous-titres ; s'il n'y a pas de gros titre dans la scène, mets "" ;
 - reprends les durées du brief dans "duree" (la durée du brief est prioritaire sur ${dur} s) ;
 - "visuel" résume le visuel décrit dans le brief ;
 - "prompt_video" (en anglais) traduit le visuel de la scène ET répète à chaque scène la direction artistique du brief (style, palette, personnage décrit à l'identique), pour que toutes les scènes se ressemblent ; n'y mets JAMAIS les titres, bandeaux, compteurs, chiffres ou sous-titres du brief (ils sont ajoutés à part) : la vidéo IA ne doit contenir aucun texte ;
 - "hook" = l'accroche de la première scène ; "script" = toutes les voix off bout à bout.`
-  : `Durée : ${dur} secondes. Crée 4 à 6 scènes dont les durées totalisent ${dur} s, avec un cliffhanger ou une boucle en fin de vidéo. Dans chaque "prompt_video", répète le même style visuel et décris le personnage principal à l'identique, sans aucun texte dans l'image. "texte_ecran" = un message court et percutant pour la scène (sans emoji, 60 caractères maximum).`}
+  : `Durée : ${dur} secondes. Crée 4 à 6 scènes dont les durées totalisent ${dur} s, avec un cliffhanger ou une boucle en fin de vidéo. Dans chaque "prompt_video", répète le même style visuel et décris le personnage principal à l'identique, sans aucun texte dans l'image. "texte_ecran" = seulement s'il apporte quelque chose (chiffre clé, question, appel à l'action), 45 caractères maximum, sans emoji ; sinon "". Au maximum 3 scènes avec du texte.`}
 
-Règles d'écriture : "titre_hook" = le hook en version titre, très court (40 caractères maximum, sans emoji), affiché en gros au début de la vidéo. Tous les textes sont en français correct, avec accents. Les voix off sont écrites pour être lues à voix haute avec énergie : phrases courtes, ponctuation claire, nombres écrits comme on les dit (« 5 000 euros »).
+Règles d'écriture : "titre_hook" = le hook en version titre, très court (40 caractères maximum, sans emoji), affiché en gros au début de la vidéo. Un "texte_ecran" ne répète jamais la voix off mot pour mot. Tous les textes sont en français correct, avec accents. Les voix off sont écrites pour être lues à voix haute avec énergie : phrases courtes, ponctuation claire, nombres écrits comme on les dit (« 5 000 euros »).
 
 Réponds en français avec UNIQUEMENT un objet JSON de cette forme, aucun texte hors JSON :
 {"hook":"...","titre_hook":"...","script":"texte complet de la voix off","scenes":[{"numero":1,"duree":"0-3 s","visuel":"description du plan","voix":"texte dit","texte_ecran":"message court affiché","prompt_video":"prompt en anglais, détaillé, format vertical 9:16, pour un générateur de vidéo IA, sans aucun texte dans l'image"}],"legende":"...","hashtags":["#..."]}`;
