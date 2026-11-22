@@ -51,10 +51,10 @@ function assemble(files, output) {
   const args = ["-y"];
   files.forEach((f) => args.push("-i", f));
   const prep = files
-    .map((_, i) => `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v${i}]`)
+    .map((_, i) => `[${i}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1,fps=30[v${i}]`)
     .join(";");
   const join = files.map((_, i) => `[v${i}]`).join("") + `concat=n=${files.length}:v=1:a=0[out]`;
-  args.push("-filter_complex", `${prep};${join}`, "-map", "[out]", "-c:v", "libx264", "-pix_fmt", "yuv420p", output);
+  args.push("-filter_complex", `${prep};${join}`, "-map", "[out]", "-c:v", "libx264", "-preset", "veryfast", "-threads", "2", "-pix_fmt", "yuv420p", output);
   return new Promise((resolve, reject) => {
     const ff = spawn("ffmpeg", args);
     let err = "";
