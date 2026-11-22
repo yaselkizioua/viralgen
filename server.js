@@ -44,7 +44,8 @@ async function waitOutput(p, label) {
 
 // Génère un clip vidéo pour une scène
 async function makeClip(scene) {
-  const input = { prompt: scene.prompt_video, ...JSON.parse(INPUT_EXTRA) };
+  const noText = /no text/i.test(scene.prompt_video) ? "" : ", no text, no letters, no words, no numbers, no subtitles, no logos";
+  const input = { prompt: scene.prompt_video + noText, ...JSON.parse(INPUT_EXTRA) };
   const p = await rep(`https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions`, {
     method: "POST",
     body: JSON.stringify({ input }),
@@ -147,7 +148,7 @@ async function runJob(id, scenes) {
           await download(voiceUrl, voice);
         }
         job.done += 1;
-        return { clip, voice, text: s.texte_ecran };
+        return { clip, voice, text: "" };
       })
     );
     job.status = "assembling";
@@ -194,15 +195,14 @@ ${isBrief
   ? `Ce texte est un brief précis. Tu dois le RESPECTER FIDÈLEMENT, pas inventer une autre histoire :
 - garde exactement les mêmes scènes, dans le même ordre (8 scènes maximum) ;
 - reprends MOT POUR MOT les voix off du brief dans "voix" ; si une voix off est à laisser vide, mets "voix": "" ;
-- reprends les gros titres / textes écran du brief dans "texte_ecran" (court) ;
 - reprends les durées du brief dans "duree" (la durée du brief est prioritaire sur ${dur} s) ;
 - "visuel" résume le visuel décrit dans le brief ;
-- "prompt_video" (en anglais) traduit le visuel de la scène ET répète à chaque scène la direction artistique du brief (style, palette, personnage décrit à l'identique), pour que toutes les scènes se ressemblent ;
+- "prompt_video" (en anglais) traduit le visuel de la scène ET répète à chaque scène la direction artistique du brief (style, palette, personnage décrit à l'identique), pour que toutes les scènes se ressemblent ; ignore les gros titres, bandeaux, compteurs et sous-titres du brief : AUCUN texte ne doit apparaître dans l'image ;
 - "hook" = l'accroche de la première scène ; "script" = toutes les voix off bout à bout.`
   : `Durée : ${dur} secondes. Crée 4 à 6 scènes dont les durées totalisent ${dur} s, avec un cliffhanger ou une boucle en fin de vidéo. Dans chaque "prompt_video", répète le même style visuel et décris le personnage principal à l'identique.`}
 
 Réponds en français avec UNIQUEMENT un objet JSON de cette forme, aucun texte hors JSON :
-{"hook":"...","script":"texte complet de la voix off","scenes":[{"numero":1,"duree":"0-3 s","visuel":"description du plan","voix":"texte dit","texte_ecran":"texte court","prompt_video":"prompt en anglais, détaillé, format vertical 9:16, pour un générateur de vidéo IA"}],"legende":"...","hashtags":["#..."]}`;
+{"hook":"...","script":"texte complet de la voix off","scenes":[{"numero":1,"duree":"0-3 s","visuel":"description du plan","voix":"texte dit","prompt_video":"prompt en anglais, détaillé, format vertical 9:16, pour un générateur de vidéo IA, qui se termine toujours par : no text, no letters, no words, no numbers, no subtitles, no logos"}],"legende":"...","hashtags":["#..."]}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -217,12 +217,12 @@ Réponds en français avec UNIQUEMENT un objet JSON de cette forme, aucun texte 
   }
 });
 
-// Corps attendu : { scenes: [{ prompt_video: "...", voix: "...", texte_ecran: "..." }, ...] }
+// Corps attendu : { scenes: [{ prompt_video: "...", voix: "..." }, ...] }
 app.post("/api/videos", (req, res) => {
   const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   const scenes = (req.body?.scenes || [])
     .filter((s) => typeof s.prompt_video === "string" && s.prompt_video.trim())
-    .map((s) => ({ prompt_video: s.prompt_video, voix: str(s.voix, 300), texte_ecran: str(s.texte_ecran, 80) }));
+    .map((s) => ({ prompt_video: s.prompt_video, voix: str(s.voix, 300) }));
   if (!scenes.length || scenes.length > 8) return res.status(400).json({ error: "Entre 1 et 8 scènes avec prompt_video." });
   const id = crypto.randomUUID();
   jobs.set(id, { status: "generating", done: 0, total: scenes.length });
